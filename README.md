@@ -1,2 +1,6 @@
-# 4gmonitor
-4gmonitor
+# serial  
+	4g monitor deamon.
+
+
+
+
