@@ -148,7 +148,7 @@ int parse_args(int argc, char *argv[]) {
 }
 
 int usage() {
-	printf(	"Usage: serial [options] ...\n"
+	printf(	"Usage: 4gmonitor [options] ...\n"
 					"Options:\n"
 					"  -d /dev/ttyS1						Use which uart to communicate with zwave. \n"
 					"  -b 115200                set uart buadrate.\n"
@@ -158,10 +158,10 @@ int usage() {
 
 int write_pid() {
 	int fd = -1;
-	if (access("/var/run/serial.pid", F_OK) != 0) {
-		fd = open("/var/run/serial.pid", O_WRONLY | O_CREAT, 0644);
+	if (access("/var/run/4gmonitor.pid", F_OK) != 0) {
+		fd = open("/var/run/4gmonitor.pid", O_WRONLY | O_CREAT, 0644);
 	} else {
-		fd = open("/var/run/serial.pid", O_WRONLY);
+		fd = open("/var/run/4gmonitor.pid", O_WRONLY);
 	}
 	
 	if (fd < 0) {

@@ -3,8 +3,8 @@
 #export	STAGING_DIR	:= $(CROSSTOOLDIR)/staging_dir
 #export	PATH :=$(PATH):$(STAGING_DIR)/toolchain-mips_34kc_gcc-4.8-linaro_uClibc-0.9.33.2/bin
 #CROSS 	?= mips-openwrt-linux-
-CROSS 	?= mipsel-openwrt-linux-
-ARCH		?= mips
+#CROSS 	?= mipsel-openwrt-linux-
+#ARCH		?= mips
 
 GCC 		?= $(CROSS)gcc
 CXX			?= $(CROSS)g++

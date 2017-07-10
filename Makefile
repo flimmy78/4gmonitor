@@ -1,7 +1,7 @@
 ROOTDIR=$(shell pwd)
 WORKDIR=$(ROOTDIR)/build
 
-targets	 += serial
+targets	 += 4gmonitor
 
 .PHONY: targets
 
@@ -35,6 +35,6 @@ objs = $(subst $(ROOTDIR),$(WORKDIR), $(subst .c,.o,$(srcs)))
 -include $(ROOTDIR)/make/arch.mk
 -include $(ROOTDIR)/make/rules.mk
 
-$(eval $(call LinkApp,serial,$(objs)))
+$(eval $(call LinkApp,4gmonitor,$(objs)))
 
 
