@@ -25,32 +25,25 @@ int fgmonitor_usbdev_mode_is_ecm();
 int fgmonitor_usbdev_network_ok();
 int fgmonitor_dial();
 
+int scmd(char *cmd, char *buf, int size);
+
 int fgmonitor_is_printable_buf(char *buf, int size);
 
 //////////////////////////////////////////////////////////////////////////
 int		fgmonitor_init(void *_th, void *_fet, const char *_dev, int _buad) {
 	env.th = _th;
 	env.fet = _fet;
+
+	strcpy(env.sdev, _dev);
+	env.sbuad = _buad;
 	
 	timer_init(&env.work_timer, fgmonitor_run);
 	timer_init(&env.step_timer, fghandler_run);
 
 	lockqueue_init(&env.msgq);
 
+	timer_set(env.th, &env.work_timer, 10);
 
-	/* serial */
-	strcpy(env.sdev, _dev);
-	env.sbuad = _buad;
-	int ret =  serial_open(env.sdev, env.sbuad);
-	if (ret < 0) {
-		log_err("[%d] open serial %s(%d) error: %d", __LINE__, env.sdev, env.sbuad, ret);
-		return -1;
-	}
-	env.sfd = ret;
-  file_event_reg(env.fet, env.sfd, fgmonitor_serial_in, NULL, NULL);
-
-	/* io */
-  file_event_reg(env.fet, 0, fgmonitor_std_in, NULL, NULL);
 	return 0;
 }
 
@@ -67,7 +60,8 @@ int		fgmonitor_push_msg(int eid, void *param, int len) {
 			 return -1;
 		}
 		e->eid = eid;
-		e->param = param;
+		e->data = param;
+		e->len = len;
 		lockqueue_push(&env.msgq, e);
 		fgmonitor_step();
 	}
@@ -89,136 +83,209 @@ void	fghandler_run(struct timer *timer) {
 
 
 int fgmonitor_handler_event(stEvent_t *event) {
-	log_info("[%d] fgmonitor module now not support event handler, only free the event!!!", __LINE__);
+	//log_info("[%d] fgmonitor module now not support event handler, only free the event!!!", __LINE__);
 
-	if (event->eid == IE_TIMER_CHECK) {
-		if (!fgmonitor_usbdev_exsit()) {
-			log_err("usb 4g device not exsit, please plug in the device");
-			return -1;
-		}
+	if (event->eid != IE_TIMER_CHECK) {
+		return -1;
+	}
+
+	if (!fgmonitor_usbdev_exsit()) {
+		log_err("usb 4g device not exsit, please plug in the device");
+		return -2;
+	}
 
 		
-		int switch_cnt = 0;
-re_switch:
-		if (!fgmonitor_usbdev_mode_is_ecm()) {
-			if (switch_cnt >= 3) {
-				log_err("usb 4g device can't be switch to correct mode!!!");
-				return -2;
-			}
-			switch_cnt++;
-			if (fgmonitor_usbdev_switch_to_ecm() != 0) {
-				log_warn("usb 4g device work mode not correct, trying switch it to correct mode failed");
-				return -2;
-			} 
-			goto re_switch;
-		} 
-			
-
-		int dial_cnt = 0;
-re_dial:
-		if (!fgmonitor_usbdev_network_ok()) {
-			if (dial_cnt >= 3) {	
-				log_err("usb 4g device can dialing correctlly!!!, maybe arrears!");
-				return -3;
-			}
-			dial_cnt++;
-			if (!fgmonitor_dial()) {
-				log_warn("usb 4g device offline, trying to dialing failed!");
-				return -3;
-			}
-			goto re_dial;
-		}
+	if (!fgmonitor_usbdev_mode_is_ecm()) {
+		log_err("usb 4g deice mode is not corrent, try to switch it ..");
+		fgmonitor_usbdev_switch_to_ecm();
+		return -3;
 	}
+
+
+	if (!fgmonitor_usbdev_network_ok()) {
+		log_warn("usb 4g device offline, trying to dialing ...");
+		fgmonitor_dial();
+		return -4;
+	}
+
+	log_info("usb 4g ok!");
+
 	return 0;
 }
 
 
 
-void	fgmonitor_std_in(void *arg, int fd) {
-	char buf[1024];
-
-	int ret = read(0, buf, sizeof(buf));
-	if (ret <= 0) {
-		log_warn("what happend?");
-		return;
-	}
-
-	int size = ret;
-	buf[size] = 0;
-
-	//serial_write(env.sfd, buf, size, 80);
-
-	log_debug(">$");
-}
-
-
-void	fgmonitor_serial_in(void *arg, int fd) {
-	char buf[1024];
-	int ret = serial_read(env.sfd, buf, sizeof(buf), 80);
-	if (ret <= 0) {
-		log_warn("[%d] can't recv any bytes from serial : %d", __LINE__, ret);
-		return;
-	}
-
-	buf[ret] = 0;
-	if (fgmonitor_is_printable_buf(buf, ret)) {
-		log_info("serialbuf: %s", buf);
-	} else {
-		log_debug_hex("serial buf:", buf, ret);
-	}
-	return;
-}
 
 //////////////////////////////////////////////////////////////////////////
 int fgmonitor_usbdev_exsit() {
 	//Bus 001 Device 005: ID 0a12:0001
+
 	/*
-	const char *pid1 = "0a12:0001";
-	const char *pid2 = "0a12:0002";
-	char sbuf[128];
-
-	
-	sprintf(sbuf, "lsusb | grep %s | wc -l", pid1);
-	int x = scmd(sbuf);
-	if (x != 0) {
-		return 1;
-	}
-
-	sprintf(sbuf, "lsusb | grep %s | wc -l", pid2);
-	int x = scmd(sbuf);
-	if (x != 0) {
-		return 1;
-	}
+	const char *pids[] = {
+		"19d2:1432",
+		"19d2:1433",
+		"19d2:1476",
+		"19d2:1509",
+	};
 	*/
 
-	return 0;
-}
-int fgmonitor_usbdev_switch_to_ecm() {
-	return 0;
+	char cmd[256];
+	char buf[256];
+	
+	sprintf(cmd, "lsusb | grep \"%s\" | wc -l", "19d2:");
+	scmd(cmd, buf, sizeof(buf));
+	if (buf[0] == '0') {
+		return 0;
+	}
+
+	return 1;
 }
 int fgmonitor_usbdev_mode_is_ecm() {
-	/*
-	const char pid1 = "0a12:0002";
-	char sbuf[128];
-	sprintf(sbuf, "lsusb | grep %s | wc -l", pid1);
-	int x = scmd(sbuf);
-	return x ? 1 : 0;
-	*/
+	const char *ecm_pid = "19d2:1476";
+
+	char cmd[256];
+	char buf[256];
+	
+	sprintf(cmd, "lsusb | grep \"%s\" | wc -l", ecm_pid);
+	scmd(cmd, buf, sizeof(buf));
+	if (buf[0] == '0') {
+		return 0;
+	}
+
+	return 1;
+
+}
+
+int fgmonitor_usbdev_switch_to_ecm() {
+	
+	const char *dev = "/dev/ttyUSB1";
+	int fd = serial_open(dev, 115200);
+	if (fd < 0) {
+		return -1;
+	}
+
+	const char *ATCMD = "AT+ZSWITCH=L\r";
+	int ret = serial_write(fd, (char *)ATCMD, strlen(ATCMD), 80);
+	if (ret <= 0) {
+		serial_close(fd);
+		return -2;
+	}
+
+	char buf[1024];
+	 ret = serial_read(fd, buf, sizeof(buf), 4080);
+	if (ret <= 0) {
+		serial_close(fd);
+		return -3;
+	}
+	buf[ret] = 0;
+	log_debug("======[%s] AT RETRUN:=====", ATCMD);
+	log_debug("\n[%s]", buf);
+	log_debug("=====================");
+
+	serial_close(fd);
+
+
 	return 0;
 }
 int fgmonitor_usbdev_network_ok() {
-	/*
-	char sbuf[128];
-	sprintf(sbuf, "ifconfig usb0 | grep ...", pid1);
-	int x = scmd(sbuf);
-	*/
-	return 0;
+	char cmd[256];
+	char buf[256];
+	
+	sprintf(cmd, "ping 8.8.8.8 -4 -c 1  -W %d | "
+							 "grep \"100%% packet loss\" | wc -l", 8);
+	scmd(cmd, buf, sizeof(buf));
+	if (buf[0] == '1') {
+		return 0;
+	}
+
+	return 1;
 }
 int fgmonitor_dial() {
+	const char *dev = "/dev/ttyUSB1";
+	int fd = serial_open(dev, 115200);
+	if (fd < 0) {
+		return -1;
+	}
+
+	const char *ATCMD = "ATI\r";
+	int ret = serial_write(fd, (char *)ATCMD, strlen(ATCMD), 80);
+	sleep(2);
+	if (ret <= 0) {
+		serial_close(fd);
+		return -2;
+	}
+	char buf[1024];
+	 ret = serial_read(fd, buf, sizeof(buf), 4080);
+	if (ret <= 0) {
+		serial_close(fd);
+		return -3;
+	}
+	buf[ret] = 0;
+	log_debug("======[%s] AT RETRUN:=====", "ATI");
+	log_debug("\n[%s]", buf);
+	log_debug("=====================");
+	if (strcmp(buf, "\nERROR\n") == 0) {
+		serial_close(fd);
+		return -3;
+	}
+
+
+
+	ATCMD = "AT+CGDCONT=1,\"IP\",\"CMNET\"\r";
+	ret = serial_write(fd, (char *)ATCMD, strlen(ATCMD), 80);
+	sleep(2);
+	if (ret <= 0) {
+		serial_close(fd);
+		return -2;
+	}
+	 ret = serial_read(fd, buf, sizeof(buf), 4080);
+	if (ret <= 0) {
+		serial_close(fd);
+		return -3;
+	}
+	buf[ret] = 0;
+	log_debug("======[%s] AT RETRUN:=====", "AT+CGDCONT=1,\"IP\",\"CMNET\"");
+	log_debug("\n[%s]", buf);
+	log_debug("=====================");
+
+	log_debug_hex("BUF:", buf, ret);
+	if (strcmp(buf, "\r\nERROR\n\n") == 0) {
+		serial_close(fd);
+		return -3;
+	}
+
+
+	ATCMD = "AT+ZECMCALL=1\r";
+	ret = serial_write(fd, (char *)ATCMD, strlen(ATCMD), 80);
+	sleep(2);
+	if (ret <= 0) {
+		serial_close(fd);
+		return -2;
+	}
+	 ret = serial_read(fd, buf, sizeof(buf), 4080);
+	if (ret <= 0) {
+		serial_close(fd);
+		return -3;
+	}
+	buf[ret] = 0;
+	log_debug("======[%s] AT RETRUN:=====", "AT+ZECMCALL=1");
+	log_debug("\n[%s]", buf);
+	log_debug("=====================");
+
+	if (strcmp(buf, "\r\nERROR\r\n") == 0) {
+		serial_close(fd);
+		return -3;
+	}
+
+
+	serial_close(fd);
+
+	
+	system("dhcpcd usb0");
+	sleep(2);
+
 	return 0;
 }
-
-
 
 
 ///////////////////////////////////////////////////////////
@@ -230,6 +297,31 @@ int fgmonitor_is_printable_buf(char *buf, int size) {
 		}
 	}
 
+
 	return 1;
+}
+
+int scmd(char *cmd, char *buf, int size) {
+	FILE *fp = popen(cmd, "r");
+	if (fp == NULL) {
+		return -1;
+	}
+
+	char *s = fgets(buf, size, fp);
+	if (s == NULL) {
+		return -2;
+	}
+	
+	int len = strlen(s);
+	if (len > 1) {
+		s[len-1] = 0;
+	}
+
+	log_debug("cmd : \n[%s].", cmd);
+	log_debug("ret : \n[%s].", buf);
+
+	pclose(fp);
+	
+	return 0;
 }
 

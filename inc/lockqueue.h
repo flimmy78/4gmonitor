@@ -11,11 +11,6 @@ typedef struct _stLockCondQueue {
   stList_t list;
 }stLockQueue_t;
 
-typedef struct stEvent {
-	int		eid;
-	int		size;
-	void	*param;
-}stEvent_t;
 
 void lockqueue_init(stLockQueue_t *lq);
 void lockqueue_push(stLockQueue_t *lq, void *elem);

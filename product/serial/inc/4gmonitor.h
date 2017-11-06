@@ -5,12 +5,9 @@
 #include "file_event.h"
 #include "lockqueue.h"
 
-
-typedef enum em4gmonitorMsg{
-	IE_NONE = 0x00,
-	IE_TIMER_CHECK = 0x01,
-}em4gmonitorMsg_t;
-
+enum {
+	IE_TIMER_CHECK = 1,
+};
 
 typedef struct st4gmonitorEnv {
 	struct file_event_table *fet;
@@ -20,13 +17,16 @@ typedef struct st4gmonitorEnv {
 
 	stLockQueue_t msgq;
 
-
 	char	sdev[64];
 	int		sbuad;
 	int		sfd;
-
 }st4gmonitorEnv_t;
 
+typedef struct stEvent {
+	int		eid;
+	int		len;
+	void	*data;
+}stEvent_t;
 
 
 
@@ -39,8 +39,6 @@ void	fghandler_run(struct timer *timer);
 void	fgmonitor_serial_in(void *arg, int fd);
 void	fgmonitor_std_in(void *arg, int fd);
 int		fgmonitor_handler_event(stEvent_t *event);
-
-
 
 
 

@@ -93,18 +93,18 @@ void run_main() {
 }
 
 static void ds_child_exit_handler(int s) {
-	log_info("[%s] %d", __func__, __LINE__);
+	//log_info("[%s] %d", __func__, __LINE__);
 	ds_child_died = 1;
 }
 static void ds_sig_exit_handler(int s) {
-	log_info("[%s] %d : %d", __func__, __LINE__, s);
+	//log_info("[%s] %d : %d", __func__, __LINE__, s);
 	exit(1);
 }
 static void ds_sigpipe_handler(int s) {
-	log_info("[%s] %d : %d", __func__, __LINE__, s);
+	//log_info("[%s] %d : %d", __func__, __LINE__, s);
 }
 static void ds_exit_handler(void) {
-	log_info("[%s] %d", __func__, __LINE__);
+	//log_info("[%s] %d", __func__, __LINE__);
 }
 
 static void sig_set() {
@@ -131,7 +131,7 @@ static void sig_set() {
 
 int parse_args(int argc, char *argv[]) {
 	int ch = 0;
-	while((ch = getopt(argc,argv,"Cd:b:"))!= -1){
+	while((ch = getopt(argc,argv,"d:b:"))!= -1){
 		switch(ch){
 			case 'd':
 				uart_dev = optarg;

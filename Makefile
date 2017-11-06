@@ -37,4 +37,6 @@ objs = $(subst $(ROOTDIR),$(WORKDIR), $(subst .c,.o,$(srcs)))
 
 $(eval $(call LinkApp,4gmonitor,$(objs)))
 
+scp:
+	scp ./build/4gmonitor root@192.168.10.230:/root
 
